@@ -1,0 +1,9 @@
+{
+    "files.associations": {
+        "typeinfo": "c",
+        "stb_ds.h": "c",
+        "number.h": "c",
+        "stdbool.h": "c",
+        "lexer.h": "c"
+    }
+}
