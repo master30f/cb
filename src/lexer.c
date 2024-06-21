@@ -77,8 +77,9 @@ Token * lex(usize programLen, const u8 * program, usize * tokenCount)
             usize length = cursor - begin;
 
             // FIXME: memory leak!
-            u8 * string = malloc(length);
+            u8 * string = malloc(length + 1);
             assert(string);
+            string[length] = '\0';
 
             memcpy(string, &program[begin], length);
 

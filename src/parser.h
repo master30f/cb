@@ -1,7 +1,7 @@
 #pragma once
 
-#include "lexer.h"
 #include "number.h"
+#include "lexer.h"
 
 typedef u16 NodeType;
 #define NT_NONE      0

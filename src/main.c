@@ -2,6 +2,7 @@
 
 #include "lexer.c"
 #include "parser.c"
+#include "compiler.c"
 
 uint8_t * readFile(const char * fileName, size_t * dataSize)
 {
@@ -35,9 +36,22 @@ int main(void)
     usize   tokenCount;
     Token * tokens = lex(programLen, program, &tokenCount);
 
-    Node * node = parse(tokenCount, tokens);
+    Node * ast = parse(tokenCount, tokens);
 
-    printNode(node, 0);
+    usize instructionCount;
+    Instruction * instructions = compile(ast, &instructionCount);
+
+    for (usize i = 0; i < instructionCount; i++)
+    {
+        Instruction inst = instructions[i];
+
+        switch (inst.type)
+        {
+            case IT_VALUE_32:   printf("value32 &%lld, %d\n", inst.dstSlot, inst.srcValue32); break;
+            case IT_RET_SET_32: printf("retSet32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_RETURN:     printf("return\n"); break;
+        }
+    }
 
     printf("finished succesfully\n");
 
