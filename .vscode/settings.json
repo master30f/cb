@@ -4,6 +4,7 @@
         "stb_ds.h": "c",
         "number.h": "c",
         "stdbool.h": "c",
-        "lexer.h": "c"
+        "lexer.h": "c",
+        "stdio.h": "c"
     }
 }
