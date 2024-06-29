@@ -3,6 +3,7 @@
 #include "lexer.c"
 #include "parser.c"
 #include "compiler.c"
+#include "target/x86_64.c"
 
 uint8_t * readFile(const char * fileName, size_t * dataSize)
 {
@@ -47,11 +48,27 @@ int main(void)
 
         switch (inst.type)
         {
-            case IT_VALUE_32:   printf("value32 &%lld, %d\n", inst.dstSlot, inst.srcValue32); break;
-            case IT_RET_SET_32: printf("retSet32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
-            case IT_RETURN:     printf("return\n"); break;
+            case IT_VALUE_32:    printf("value32 &%lld, %d\n", inst.dstSlot, inst.srcValue32); break;
+            case IT_RET_MOVE_32: printf("retMove32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_RETURN:      printf("return\n"); break;
+            case IT_BEGIN_SCOPE: printf("beginScope %lld\n", inst.slotCount); break;
+            case IT_END_SCOPE:   printf("endScope\n"); break;
+            case IT_MOVE_32:     printf("move32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_ADD_32:      printf("add32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            default:             printf("unknown\n"); break;
         }
     }
+    printf("\n");
+
+    usize byteCount;
+    u8 * bytes = translate(instructions, instructionCount, &byteCount);
+
+    FILE * file = fopen("./test.o", "wb");
+    assert(file);
+
+    assert(byteCount == fwrite(bytes, 1, byteCount, file));
+
+    fclose(file);
 
     printf("finished succesfully\n");
 

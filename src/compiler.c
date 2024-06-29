@@ -3,58 +3,83 @@
 #include "assert.h"
 #include "stb_ds.h"
 
-Instruction * instructions;
-
-// TODO: must be a stack
-usize unoccupiedSlot;
-
-static void compileNamespace(const Node * node)
+static void compileNamespace(Instruction ** is, usize * sc, const Node * node)
 {
     assert(node->type == NT_NAMESPACE);
+    NodeNamespace * body = (NodeNamespace *) &node->body;
 
-    for (usize i = 0; i < node->bodyLen; i++)
+    for (usize i = 0; i < body->bodyLen; i++)
     {
-        compileStatement(node->body[i]);
+        compileStatement(is, sc, body->body[i]);
     }
 }
 
-static void compileFunctionDeclaration(const Node * node)
+static void compileFunctionDeclaration(Instruction ** is, usize * sc, const Node * node)
 {
     assert(node->type == NT_FUNC_DECL);
+    NodeFuncDecl * body = (NodeFuncDecl *) &node->body;
 
-    for (usize i = 0; i < node->bodyLen; i++)
+    // FIXME: memory leak!
+    Instruction * instructionStream = NULL;
+    usize slotCount = *sc;
+
+    for (usize i = 0; i < body->bodyLen; i++)
     {
-        compileStatement(node->body[i]);
+        compileStatement(&instructionStream, &slotCount, body->body[i]);
     }
+
+    arrpush(*is, ((Instruction){ IT_BEGIN_SCOPE, .slotCount = slotCount - *sc }));
+
+    // FIXME: eww
+    for (usize i = 0; i < arrlenu(instructionStream); i++)
+    {
+        arrpush(*is, instructionStream[i]);
+    }
+    arrfree(instructionStream);
+
+    arrpush(*is, ((Instruction){ IT_END_SCOPE }));
 }
 
-static void compileReturn(const Node * node)
+static void compileReturn(Instruction ** is, usize * sc, const Node * node)
 {
     assert(node->type == NT_RETURN);
+    NodeReturn * body = (NodeReturn *) &node->body;
 
-    if (node->node != NULL)
+    if (body->value != NULL)
     {
-        usize outSlot = compileExpression(node->node);
-        arrpush(instructions, ((Instruction){ IT_RET_SET_32, .srcSlot = outSlot, .dstSlot = 0 }));
+        usize srcSlot = compileExpression(is, sc, body->value);
+        arrpush(*is, ((Instruction){ IT_RET_MOVE_32, .srcSlot = srcSlot, .dstSlot = 0 }));
     }
 
-    arrpush(instructions, ((Instruction){ IT_RETURN }));
+    arrpush(*is, ((Instruction){ IT_RETURN }));
 }
 
-static usize compileAtom(const Node * node)
+static void compileVariableDeclaration(Instruction ** is, usize * sc, const Node * node)
+{
+    assert(node->type == NT_VAR_DECL);
+    NodeVarDecl * body = (NodeVarDecl *) &node->body;
+
+    assert(body->value != NULL);
+
+    usize srcSlot = compileExpression(is, sc, body->value);
+    usize dstSlot = (*sc)++;
+    arrpush(*is, ((Instruction){ IT_MOVE_32, .srcSlot = srcSlot, .dstSlot = dstSlot }));
+}
+
+static usize compileAtom(Instruction ** is, usize * sc, const Node * node)
 {
     assert(node->type == NT_ATOM);
+    NodeAtom * body = (NodeAtom *) &node->body;
 
-    const Token * token = node->token;
+    const Token * token = body->token;
 
-    usize outSlot = ~0;
+    usize outSlot = (*sc)++;
 
     switch (token->type)
     {
         case TT_INT:
         {
-            outSlot = unoccupiedSlot++;
-            arrpush(instructions, ((Instruction){ IT_VALUE_32, .dstSlot = outSlot, .srcValue32 = (u32) token->value }));
+            arrpush(*is, ((Instruction){ IT_VALUE_32, .dstSlot = outSlot, .srcValue32 = (u32) token->value }));
         } break;
         default: assert(0 && "TODO:");
     }
@@ -62,34 +87,52 @@ static usize compileAtom(const Node * node)
     return outSlot;
 }
 
-static usize compileExpression(const Node * node)
+static usize compileAddition(Instruction ** is, usize * sc, const Node * node)
+{
+    assert(node->type == NT_ADDITION);
+    NodeAddition * body = (NodeAddition *) &node->body;
+
+    usize leftSlot  = compileExpression(is, sc, body->left);
+    usize rightSlot = compileExpression(is, sc, body->right);
+
+    usize outSlot = (*sc)++;
+
+    arrpush(*is, ((Instruction){ IT_MOVE_32, .dstSlot = outSlot, .srcSlot = leftSlot }));
+    arrpush(*is, ((Instruction){ IT_ADD_32, .dstSlot = outSlot, .srcSlot = rightSlot }));
+
+    return outSlot;
+}
+
+static usize compileExpression(Instruction ** is, usize * sc, const Node * node)
 {
     switch (node->type)
     {
-        case NT_ATOM: return compileAtom(node);
+        case NT_ATOM:     return compileAtom(is, sc, node);
+        case NT_ADDITION: return compileAddition(is, sc, node);
         default: assert(0 && "TODO:");
     }
 }
 
-static void compileStatement(const Node * node)
+static void compileStatement(Instruction ** is, usize * sc, const Node * node)
 {
     switch (node->type)
     {
-        case NT_NAMESPACE: compileNamespace(node); break;
-        case NT_FUNC_DECL: compileFunctionDeclaration(node); break;
-        case NT_RETURN:    compileReturn(node); break;
-        default: assert(0 && "TODO:");
+        case NT_NAMESPACE: compileNamespace(is, sc, node); break;
+        case NT_FUNC_DECL: compileFunctionDeclaration(is, sc, node); break;
+        case NT_RETURN:    compileReturn(is, sc, node); break;
+        case NT_VAR_DECL:  compileVariableDeclaration(is, sc, node); break;
+        default:           assert(0 && "TODO:");
     }
 }
 
 Instruction * compile(const Node * ast, usize * instructionCount)
 {
     // FIXME: memory leak!
-    instructions = NULL;
-    unoccupiedSlot = 0;
+    Instruction * instructionStream = NULL;
+    usize slotCount = 0;
 
-    compileNamespace(ast);
+    compileNamespace(&instructionStream, &slotCount, ast);
 
-    *instructionCount = arrlen(instructions);
-    return instructions;
+    *instructionCount = arrlen(instructionStream);
+    return instructionStream;
 }

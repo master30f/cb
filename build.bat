@@ -1,1 +1,1 @@
-gcc src/main.c -Wall -Wextra -Wno-missing-field-initializers -o main.exe
+gcc src/main.c -I./src/ -Wall -Wextra -Wno-missing-field-initializers -o main.exe

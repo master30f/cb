@@ -129,6 +129,8 @@ Token * lex(usize programLen, const u8 * program, usize * tokenCount)
             case '{': arrpush(tokens, ((Token){ TT_L_BRACE , begin , 1 })); break;
             case '}': arrpush(tokens, ((Token){ TT_R_BRACE , begin , 1 })); break;
             case ';': arrpush(tokens, ((Token){ TT_SEMI    , begin , 1 })); break;
+            case '+': arrpush(tokens, ((Token){ TT_PLUS    , begin , 1 })); break;
+            case '=': arrpush(tokens, ((Token){ TT_EQUALS  , begin , 1 })); break;
             default:  assert(0 && "invalid character"); break;
         }
     }

@@ -9,40 +9,53 @@ typedef u16 NodeType;
 #define NT_FUNC_DECL 2
 #define NT_RETURN    3
 #define NT_ATOM      4
+#define NT_ADDITION  5
+#define NT_VAR_DECL  6
 
-typedef struct Node_t {
+typedef struct {
     NodeType type;
+    usize    begin;
+    usize    length;
 
-    usize begin;
-    usize length;
+    u8       body[];
+} NodeHeader;
 
-    union {
-        // NT_NAMESPACE, NT_FUNC_DECL
-        struct {
-            union {
-                // NT_FUNC_DECL
-                struct {
-                    const Token * returnType;
-                };
-            };
+typedef NodeHeader Node;
 
-            const Token *   name;
-            usize           bodyLen;
-            struct Node_t * body[];
-        };
-        // NT_RETURN
-        struct {
-            struct Node_t * node;
-        };
-        // NT_ATOM
-        struct {
-            const Token * token;
-        };
-    };
-} Node;
+typedef struct {
+    const Token * name;
+    usize         bodyLen;
+    const Node *  body[];
+} NodeNamespace;
+
+typedef struct {
+    const Token * returnType;
+    const Token * name;
+    usize         bodyLen;
+    const Node *  body[];
+} NodeFuncDecl;
+
+typedef struct {
+    const Node * value;
+} NodeReturn;
+
+typedef struct {
+    const Token * token;
+} NodeAtom;
+
+typedef struct {
+    const Node * left;
+    const Node * right;
+} NodeAddition;
+
+typedef struct {
+    const Token * type;
+    const Token * name;
+    const Node *  value;
+} NodeVarDecl;
 
 static Node * parseStatement(void);
 
 Node * parse(usize tokenCount, const Token * tokens);
 
-void printNode(Node * node, u32 level);
+void printNode(const Node * node, u32 level);

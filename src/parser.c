@@ -15,8 +15,11 @@ usize         cursor;
 u8 *          nodeArena;
 usize         nodeArenaCursor;
 
-static Node * allocNode(usize size)
+static NodeHeader * allocNode(usize inSize)
 {
+    usize size = inSize + sizeof(NodeHeader);
+
+    // TODO: investigate the alignment of node bodies
     usize rem  = size % alignof(Node);
     usize pad  = rem == 0 ? 0 : alignof(Node) - rem;
 
@@ -48,52 +51,107 @@ static Node * parseFunctionDeclaration(void)
     const Token * last = &tokens[cursor];
     assert(cursor < tokenCount && tokens[cursor++].type == TT_R_BRACE);
 
-    Node * node      = allocNode(sizeof(Node) + arrlen(body) * sizeof(Node *));
-    node->type       = NT_FUNC_DECL;
-    node->begin      = type->begin;
-    node->length     = last->begin + last->length;
-    node->returnType = type;
-    node->name       = name;
-    node->bodyLen    = arrlen(body);
-    memcpy(&node->body, body, arrlen(body) * sizeof(body[0]));
-
+    NodeHeader * nodeHeader = allocNode(sizeof(NodeFuncDecl) + arrlen(body) * sizeof(Node *));
+    NodeFuncDecl * nodeBody = (NodeFuncDecl *) &nodeHeader->body;
+    nodeHeader->type        = NT_FUNC_DECL;
+    nodeHeader->begin       = type->begin;
+    nodeHeader->length      = last->begin + last->length;
+    nodeBody->returnType    = type;
+    nodeBody->name          = name;
+    nodeBody->bodyLen       = arrlen(body);
+    memcpy(&nodeBody->body, body, arrlen(body) * sizeof(body[0]));
     arrfree(body);
-    return node;
+
+    return nodeHeader;
+}
+
+static Node * parseAtom(void)
+{
+    const Token * token = &tokens[cursor];
+
+    if (cursor++ >= tokenCount || (token->type != TT_INT && token->type != TT_ID)) return NULL;
+
+    NodeHeader * nodeHeader = allocNode(sizeof(NodeAtom));
+    NodeAtom * nodeBody     = (NodeAtom *) &nodeHeader->body;
+    nodeHeader->type        = NT_ATOM;
+    nodeHeader->begin       = token->begin;
+    nodeHeader->length      = token->length;
+    nodeBody->token         = token;
+
+
+    return nodeHeader;
 }
 
 static Node * parseExpression(void)
 {
-    const Token * token = &tokens[cursor];
+    Node * left = parseAtom();
 
-    if (tokens[cursor++].type != TT_INT) return NULL;
+    if (tokens[cursor].type == TT_PLUS)
+    {
+        cursor++;
+        Node * right = parseExpression();
 
-    Node * node  = allocNode(sizeof(Node));
-    node->type   = NT_ATOM;
-    node->begin  = token->begin;
-    node->length = token->length;
-    node->token  = token;
+        NodeHeader * nodeHeader = allocNode(sizeof(NodeAddition));
+        NodeAddition * nodeBody = (NodeAddition *) &nodeHeader->body;
+        nodeHeader->type        = NT_ADDITION;
+        nodeHeader->begin       = left->begin;
+        nodeHeader->length      = right->begin + right->length;
+        nodeBody->left          = left;
+        nodeBody->right         = right;
 
-    return node;
+        return nodeHeader;
+    }
+
+    return left;
 }
 
 static Node * parseReturn(void)
 {
     const Token * begin = &tokens[cursor];
-
-    if (tokens[cursor++].type != TT_RETURN) return NULL;
+    if (cursor++ >= tokenCount || begin->type != TT_RETURN) return NULL;
 
     Node * value = parseExpression();
+    assert(value);
 
     const Token * last = &tokens[cursor];
-    assert(tokens[cursor++].type == TT_SEMI);
+    assert(cursor++ < tokenCount && last->type == TT_SEMI);
 
-    Node * node  = allocNode(sizeof(Node));
-    node->type   = NT_RETURN;
-    node->begin  = begin->begin;
-    node->length = last->begin + last->length;
-    node->node   = value;
+    NodeHeader * nodeHeader = allocNode(sizeof(NodeReturn));
+    NodeReturn * nodeBody   = (NodeReturn *) &nodeHeader->body;
+    nodeHeader->type        = NT_RETURN;
+    nodeHeader->begin       = begin->begin;
+    nodeHeader->length      = last->begin + last->length;
+    nodeBody->value         = value;
 
-    return node;
+    return nodeHeader;
+}
+
+static Node * parseVariableDeclaration(void)
+{
+    const Token * type = &tokens[cursor];
+    if (cursor++ >= tokenCount || type->type != TT_ID) return NULL;
+
+    const Token * name = &tokens[cursor];
+    if (cursor++ >= tokenCount || name->type != TT_ID) return NULL;
+
+    if (cursor >= tokenCount || tokens[cursor++].type != TT_EQUALS) return NULL;
+
+    Node * value = parseExpression();
+    assert(value);
+
+    const Token * last = &tokens[cursor];
+    assert(cursor++ < tokenCount && last->type == TT_SEMI);
+
+    NodeHeader * nodeHeader = allocNode(sizeof(NodeVarDecl));
+    NodeVarDecl * nodeBody  = (NodeVarDecl *) &nodeHeader->body;
+    nodeHeader->type        = NT_VAR_DECL;
+    nodeHeader->begin       = type->begin;
+    nodeHeader->length      = last->begin + last->length;
+    nodeBody->type          = type;
+    nodeBody->name          = name;
+    nodeBody->value         = value;
+
+    return nodeHeader;
 }
 
 static Node * parseStatement(void)
@@ -104,6 +162,8 @@ static Node * parseStatement(void)
     if (node = parseFunctionDeclaration(), node) return node;
     cursor = rollback;
     if (node = parseReturn(), node) return node;
+    cursor = rollback;
+    if (node = parseVariableDeclaration(), node) return node;
 
     assert(0 && "invalid syntax");
 }
@@ -126,17 +186,18 @@ Node * parse(usize inTokenCount, const Token * inTokens)
         arrpush(body, parseStatement());
     }
 
-    Node * node   = allocNode(sizeof(Node) + arrlen(body) * sizeof(Node *));
-    node->type    = NT_NAMESPACE;
-    node->begin   = 0;
+    NodeHeader * nodeHeader  = allocNode(sizeof(NodeNamespace) + arrlen(body) * sizeof(Node *));
+    NodeNamespace * nodeBody = (NodeNamespace *) &nodeHeader->body;
+    nodeHeader->type         = NT_NAMESPACE;
+    nodeHeader->begin        = 0;
     // TODO: make this the actual length of the program
-    node->length  = tokens[tokenCount - 1].begin + tokens[tokenCount - 1].length;
-    node->name    = NULL;
-    node->bodyLen = arrlen(body);
-    memcpy(&node->body, body, arrlen(body) * sizeof(body[0]));
-
+    nodeHeader->length       = tokens[tokenCount - 1].begin + tokens[tokenCount - 1].length;
+    nodeBody->name           = NULL;
+    nodeBody->bodyLen        = arrlen(body);
+    memcpy(&nodeBody->body, body, arrlen(body) * sizeof(body[0]));
     arrfree(body);
-    return node;
+
+    return nodeHeader;
 }
 
 static inline void indent(u32 n)
@@ -145,7 +206,7 @@ static inline void indent(u32 n)
         printf("  ");
 }
 
-void printNode(Node * node, u32 level)
+void printNode(const Node * node, u32 level)
 {
     indent(level);
 
@@ -154,34 +215,42 @@ void printNode(Node * node, u32 level)
         case NT_NONE: printf("NONE\n"); break;
         case NT_NAMESPACE:
         {
+            NodeNamespace * body = (NodeNamespace *) &node->body;
+
             printf("NAMESPACE ");
 
-            if (node->name) printf("\"%s\"\n", node->name->string);
+            if (body->name) printf("\"%s\"\n", body->name->string);
             else printf("null\n");
 
-            for (usize i = 0; i < node->bodyLen; i++)
-                printNode(node->body[i], level + 1);
+            for (usize i = 0; i < body->bodyLen; i++)
+                printNode(body->body[i], level + 1);
         } break;
         case NT_FUNC_DECL:
         {
-            printf("FUNC_DECL %s \"%s\"\n", node->returnType->string, node->name->string);
+            NodeFuncDecl * body = (NodeFuncDecl *) &node->body;
 
-            for (usize i = 0; i < node->bodyLen; i++)
-                printNode(node->body[i], level + 1);
+            printf("FUNC_DECL %s \"%s\"\n", body->returnType->string, body->name->string);
+
+            for (usize i = 0; i < body->bodyLen; i++)
+                printNode(body->body[i], level + 1);
         } break;
         case NT_RETURN:
         {
+            NodeReturn * body = (NodeReturn *) &node->body;
+
             printf("RETURN\n");
-            printNode(node->node, level + 1);
+            printNode(body->value, level + 1);
         } break;
         case NT_ATOM:
         {
+            NodeAtom * body = (NodeAtom *) &node->body;
+
             printf("ATOM ");
 
-            switch (node->token->type)
+            switch (body->token->type)
             {
-                case TT_INT: printf("int %lld\n", node->token->value); break;
-                default: printf("<unknown>\n");
+                case TT_INT: printf("int %lld\n", body->token->value); break;
+                default:     printf("<unknown>\n");
             }
         } break;
         default: printf("<UNKNOWN>\n");
