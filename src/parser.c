@@ -33,6 +33,25 @@ static NodeHeader * allocNode(usize inSize)
 
 static Node * parseFunctionDeclaration(void)
 {
+    const Token * attributeName  = NULL;
+    const Token * attributeValue = NULL;
+
+    const Token * first = &tokens[cursor];
+    if (first->type == TT_AT)
+    {
+        assert(cursor++ < tokenCount);
+
+        attributeName = &tokens[cursor];
+        assert(cursor++ < tokenCount && attributeName->type == TT_ID);
+
+        assert(cursor < tokenCount && tokens[cursor++].type == TT_L_PAREN);
+
+        attributeValue = &tokens[cursor];
+        assert(cursor++ < tokenCount && attributeValue->type == TT_ID);
+
+        assert(cursor < tokenCount && tokens[cursor++].type == TT_R_PAREN);
+    }
+
     const Token * type = &tokens[cursor];
     if (cursor++ >= tokenCount || type->type != TT_ID) return NULL;
 
@@ -51,14 +70,16 @@ static Node * parseFunctionDeclaration(void)
     const Token * last = &tokens[cursor];
     assert(cursor < tokenCount && tokens[cursor++].type == TT_R_BRACE);
 
-    NodeHeader * nodeHeader = allocNode(sizeof(NodeFuncDecl) + arrlen(body) * sizeof(Node *));
-    NodeFuncDecl * nodeBody = (NodeFuncDecl *) &nodeHeader->body;
-    nodeHeader->type        = NT_FUNC_DECL;
-    nodeHeader->begin       = type->begin;
-    nodeHeader->length      = last->begin + last->length;
-    nodeBody->returnType    = type;
-    nodeBody->name          = name;
-    nodeBody->bodyLen       = arrlen(body);
+    NodeHeader * nodeHeader  = allocNode(sizeof(NodeFuncDecl) + arrlen(body) * sizeof(Node *));
+    NodeFuncDecl * nodeBody  = (NodeFuncDecl *) &nodeHeader->body;
+    nodeHeader->type         = NT_FUNC_DECL;
+    nodeHeader->begin        = first->begin;
+    nodeHeader->length       = last->begin + last->length;
+    nodeBody->attributeName  = attributeName;
+    nodeBody->attributeValue = attributeValue;
+    nodeBody->returnType     = type;
+    nodeBody->name           = name;
+    nodeBody->bodyLen        = arrlen(body);
     memcpy(&nodeBody->body, body, arrlen(body) * sizeof(body[0]));
     arrfree(body);
 
@@ -249,7 +270,7 @@ void printNode(const Node * node, u32 level)
 
             switch (body->token->type)
             {
-                case TT_INT: printf("int %lld\n", body->token->value); break;
+                case TT_INT: printf("int %ld\n", body->token->value); break;
                 default:     printf("<unknown>\n");
             }
         } break;

@@ -166,7 +166,7 @@ int main(void)
     for (uint64_t i = 0; i < symbolCount; i++)
     {
         Elf64Symbol symbol = symbols[i];
-        printf(" - \"%s\"\n", file + sectionHeaders[symbol.sectionHeaderIndex].offset + symbol.name);
+        printf(" - \"%s\"\n", file + sectionHeaders[symbols->sectionHeaderIndex].offset + symbol.name);
     }
 
     size_t programSize = sectionHeaders[4].size;

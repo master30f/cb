@@ -22,7 +22,7 @@ uint8_t * readFile(const char * fileName, size_t * dataSize)
 
     *dataSize = readSize;
     // TODO: handle partial reads
-    if (readSize != (size_t) size) printf("file '%s' partially read (%lld B out of %ld B)", fileName, readSize, size);
+    if (readSize != (size_t) size) printf("file '%s' partially read (%ld B out of %ld B)", fileName, readSize, size);
 
     fclose(file);
 
@@ -39,29 +39,33 @@ int main(void)
 
     Node * ast = parse(tokenCount, tokens);
 
-    usize instructionCount;
-    Instruction * instructions = compile(ast, &instructionCount);
+    Symbol * functionTable;
+    usize functionCount;
 
-    for (usize i = 0; i < instructionCount; i++)
+    usize instructionCount;
+    Instruction * instructions = compile(ast, &functionTable, &functionCount, &instructionCount);
+
+
+    /*for (usize i = 0; i < instructionCount; i++)
     {
         Instruction inst = instructions[i];
 
         switch (inst.type)
         {
-            case IT_VALUE_32:    printf("value32 &%lld, %d\n", inst.dstSlot, inst.srcValue32); break;
-            case IT_RET_MOVE_32: printf("retMove32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_VALUE_32:    printf("value32 &%ld, %d\n", inst.dstSlot, inst.srcValue32); break;
+            case IT_RET_MOVE_32: printf("retMove32 &%ld, &%ld\n", inst.dstSlot, inst.srcSlot); break;
             case IT_RETURN:      printf("return\n"); break;
-            case IT_BEGIN_SCOPE: printf("beginScope %lld\n", inst.slotCount); break;
+            case IT_BEGIN_SCOPE: printf("beginScope %ld\n", inst.slotCount); break;
             case IT_END_SCOPE:   printf("endScope\n"); break;
-            case IT_MOVE_32:     printf("move32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
-            case IT_ADD_32:      printf("add32 &%lld, &%lld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_MOVE_32:     printf("move32 &%ld, &%ld\n", inst.dstSlot, inst.srcSlot); break;
+            case IT_ADD_32:      printf("add32 &%ld, &%ld\n", inst.dstSlot, inst.srcSlot); break;
             default:             printf("unknown\n"); break;
         }
     }
-    printf("\n");
+    printf("\n");*/
 
     usize byteCount;
-    u8 * bytes = translate(instructions, instructionCount, &byteCount);
+    u8 * bytes = translate(instructions, instructionCount, functionTable, functionCount, &byteCount);
 
     FILE * file = fopen("./test.o", "wb");
     assert(file);

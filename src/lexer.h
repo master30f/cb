@@ -15,6 +15,7 @@ typedef u8 TokenType;
 #define TT_SEMI     9
 #define TT_PLUS    10
 #define TT_EQUALS  11
+#define TT_AT      12
 
 typedef struct {
     TokenType type;

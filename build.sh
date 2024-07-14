@@ -1,0 +1,1 @@
+gcc src/main.c -I./src/ -Wall -Wextra -Wno-missing-field-initializers -o ./build/main

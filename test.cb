@@ -1,6 +1,12 @@
-i32 main()
+i32 foo()
 {
-    i32 foo = 34 + 35;
+    return 21 + 21;
+}
 
-    return foo;
+@proto(main) i32 main()
+{
+    i32 foo   = 4 + 5;
+    i32 hello = foo + 60;
+
+    return hello;
 }

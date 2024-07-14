@@ -12,6 +12,7 @@ typedef u8 InstructionType;
 #define IT_END_SCOPE   5
 #define IT_MOVE_32     6
 #define IT_ADD_32      7
+#define IT_FUNC_BEGIN  8
 
 typedef struct {
     InstructionType type;
@@ -22,13 +23,20 @@ typedef struct {
             usize dstSlot;
 
             union {
-                // IT_VALUE_32
-                struct {
-                    u32 srcValue32;
-                };
                 // IT_RET_SET_32, IT_MOVE_32, IT_ADD_32
                 struct {
                     usize srcSlot;
+
+                    union {
+                        // IT_RET_SET_32
+                        struct {
+                            u8 * movProtocol;
+                        };
+                    };
+                };
+                // IT_VALUE_32
+                struct {
+                    u32 srcValue32;
                 };
             };
         };
@@ -36,10 +44,27 @@ typedef struct {
         struct {
             usize slotCount;
         };
+        // IT_FUNC_BEGIN, IT_RETURN
+        struct {
+            u8 * jmpProtocol;
+        };
     };
 } Instruction;
 
-static usize compileExpression(Instruction ** is, usize * sc, const Node * node);
-static void compileStatement(Instruction ** is, usize * sc, const Node * node);
+typedef struct {
+    u8 *  name;
+    usize value;
+} Symbol;
 
-Instruction * compile(const Node * ast, usize * instructionCount);
+typedef struct {
+    Instruction ** is;
+    usize *        sc;
+    Symbol **      st;
+    Symbol **      ft;
+    u8 *           pt;
+} Context;
+
+static usize compileExpression(Context c, const Node * node);
+static void compileStatement(Context c, const Node * node);
+
+Instruction * compile(const Node * ast, Symbol ** functionTable, usize * functionCount, usize * instructionCount);

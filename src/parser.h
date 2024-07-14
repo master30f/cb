@@ -29,6 +29,8 @@ typedef struct {
 } NodeNamespace;
 
 typedef struct {
+    const Token * attributeName;
+    const Token * attributeValue;
     const Token * returnType;
     const Token * name;
     usize         bodyLen;
